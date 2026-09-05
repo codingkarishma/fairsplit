@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const ocrRouter = require('./routes/ocr');
+const billsRouter = require('./routes/bills');
 
 // Register models (so Mongoose knows the schemas)
 require('./models/Bill');
@@ -21,6 +22,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/ocr', ocrRouter);
+app.use('/api/bills', billsRouter);
 
 app.get('/', (req, res) => res.json({ message: 'FairSplit API is running' }));
 

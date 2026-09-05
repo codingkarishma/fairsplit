@@ -1,0 +1,6 @@
+2x Fries — $10.00
+Garlic Bread — $5.00
+Chicken Biryani — $15.00
+Subtotal        30.00
+Tax              2.50
+Total           32.50

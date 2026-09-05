@@ -23,7 +23,7 @@ const OCRService = {
       const lines = text.split('\n').filter((line) => line.trim().length > 0);
       const items = [];
       const SKIP_KEYWORDS =
-        /subtotal|^total$|grand total|tax|tip|cash|change|tendered|balance|card|amount due|thank you/i;
+        /subtotal|^\s*total\b|grand total|tax|tip|cash|change|tendered|balance|card|amount due|thank you/i;
 
       for (const line of lines) {
         // Skip header/footer/separator lines
