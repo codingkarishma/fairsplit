@@ -18,8 +18,6 @@ const storage = multer.diskStorage({
   },
 });
 
-const SKIP_KEYWORDS =
-  /subtotal|^\s*total\b|grand total|tax|tip|cash|change|tendered|balance|card|amount due|thank you/i;
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
@@ -31,7 +29,11 @@ const upload = multer({
       'text/plain',
     ];
     if (allowed.includes(file.mimetype)) return cb(null, true);
-    cb(new Error('Unsupported format. Use JPG, PNG, BMP, WebP, or TXT'));
+    cb(
+      new Error(
+        'Unsupported format. Use JPG, PNG, BMP, WebP, or TXT. HEIC is currently unsupported.',
+      ),
+    );
   },
   limits: { fileSize: 5 * 1024 * 1024 },
 });
@@ -43,28 +45,10 @@ router.post('/extract', upload.single('receipt'), async (req, res) => {
 
   try {
     if (req.file.mimetype === 'text/plain') {
-      const lines = fs
-        .readFileSync(req.file.path, 'utf-8')
-        .split('\n')
-        .filter((line) => line.trim());
-      const items = [];
-
-      for (const line of lines) {
-        if (SKIP_KEYWORDS.test(line)) continue;
-        const matches = [...line.matchAll(/[₹$]?\s*([0-9,]+\.?[0-9]*)/g)];
-        if (!matches.length) continue;
-        const lastMatch = matches[matches.length - 1];
-        const price = parseFloat(lastMatch[1].replace(/,/g, ''));
-        if (isNaN(price) || price <= 0) continue;
-        const name = line
-          .slice(0, lastMatch.index)
-          .trim()
-          .replace(/[₹$\-—:|]\s*$/, '')
-          .trim();
-        if (name.length >= 2) items.push({ name, price, rawLine: line });
-      }
-
-      return res.json({ items });
+      const text = fs.readFileSync(req.file.path, 'utf-8');
+      return res.json({
+        items: OCRService.parseReceiptLines(text.split('\n')),
+      });
     }
 
     const items = await OCRService.extractItems(req.file.path);
@@ -76,7 +60,7 @@ router.post('/extract', upload.single('receipt'), async (req, res) => {
 });
 
 router.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError || err) {
+  if (err) {
     return res.status(400).json({ error: err.message });
   }
   next();

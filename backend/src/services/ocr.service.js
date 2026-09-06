@@ -1,9 +1,40 @@
 const { createWorker } = require('tesseract.js');
 
+const SKIP_KEYWORDS =
+  /subtotal|^\s*total\b|grand total|tax|tip|cash|change|tendered|balance|card|amount due|thank you/i;
+const PRICE_PATTERN = /[₹$]?\s*([0-9,]+\.?[0-9]*)/g;
+
+function parseReceiptLines(lines, { skipDecorativeLines = false } = {}) {
+  return lines.reduce((items, line) => {
+    if (!line.trim() || SKIP_KEYWORDS.test(line)) return items;
+    if (skipDecorativeLines && /^[-|=]/.test(line)) {
+      return items;
+    }
+
+    const matches = [...line.matchAll(PRICE_PATTERN)];
+    if (!matches.length) return items;
+    const lastMatch = matches[matches.length - 1];
+    const price = parseFloat(lastMatch[1].replace(/,/g, ''));
+    const priceCents = Math.round(price * 100);
+    if (isNaN(price) || priceCents <= 0) return items;
+
+    const name = line
+      .slice(0, lastMatch.index)
+      .trim()
+      .replace(/[₹$\-—:|]\s*$/, '')
+      .trim();
+    if (name.length < 2) return items;
+    items.push({ name, priceCents, rawLine: line });
+    return items;
+  }, []);
+}
+
 const OCRService = {
+  parseReceiptLines,
+
   /**
    * Extract line items from a receipt image using Tesseract.js.
-   * Returns array of { name, price, rawLine }.
+   * Returns array of { name, priceCents, rawLine }.
    *
    * IMPORTANT: OCR is not perfect — this is a heuristic, not a guarantee.
    * The host review/edit screen is MANDATORY (per design doc).
@@ -19,46 +50,7 @@ const OCRService = {
         data: { text },
       } = await worker.recognize(imagePath);
 
-      // Split into lines, filter empty
-      const lines = text.split('\n').filter((line) => line.trim().length > 0);
-      const items = [];
-      const SKIP_KEYWORDS =
-        /subtotal|^\s*total\b|grand total|tax|tip|cash|change|tendered|balance|card|amount due|thank you/i;
-
-      for (const line of lines) {
-        // Skip header/footer/separator lines
-        if (
-          line.startsWith('-') ||
-          line.startsWith('|') ||
-          line.startsWith('=')
-        ) {
-          continue;
-        }
-        if (SKIP_KEYWORDS.test(line)) continue;
-
-        // Find ALL number-like tokens on the line
-        // Handles: ₹150, $3.50, 150.00, 150,00
-        const allMatches = [...line.matchAll(/[₹$]?\s*([0-9,]+\.?[0-9]*)/g)];
-        if (allMatches.length === 0) continue;
-
-        // Take the LAST match — prices are printed at the end of receipt lines
-        const lastMatch = allMatches[allMatches.length - 1];
-        const priceStr = lastMatch[1].replace(/,/g, '');
-        const price = parseFloat(priceStr);
-        if (isNaN(price) || price <= 0) continue;
-
-        // Extract name: everything BEFORE the last match
-        let name = line.slice(0, lastMatch.index).trim();
-
-        // Clean up: remove trailing currency symbols and whitespace
-        name = name.replace(/[₹$\-—:|]\s*$/, '').trim();
-
-        if (!name || name.length < 2) continue;
-
-        items.push({ name, price, rawLine: line });
-      }
-
-      return items;
+      return parseReceiptLines(text.split('\n'), { skipDecorativeLines: true });
     } finally {
       await worker.terminate();
     }
