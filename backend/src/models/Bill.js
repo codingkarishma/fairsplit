@@ -2,8 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 // Top-level session document for a restaurant bill.
-// One Bill per shared receipt. Participants join via shareCode,
-// no auth required.
+// One Bill per shared receipt. Participants join via shareCode.
 const BillSchema = new Schema({
   // Name of the host who paid the bill.
   hostName: { type: String, required: true },
@@ -17,6 +16,9 @@ const BillSchema = new Schema({
   // Tax/tip added by host during review; split proportionally later.
   taxAmount: { type: Number, default: 0 },
   tipAmount: { type: Number, default: 0 },
+
+  // All bill amounts use this currency and its minor units.
+  currency: { type: String, enum: ['INR', 'GBP', 'USD'], default: 'INR' },
 
   // Lifecycle state:
   //   draft  — bill created, not published yet
@@ -32,6 +34,9 @@ const BillSchema = new Schema({
 
   // Short unique code used in the join link /bill/join/:shareCode.
   shareCode: { type: String, required: true, unique: true },
+
+  // Secret code used for host-only actions.
+  hostCode: { type: String, required: true },
 });
 
 module.exports = mongoose.model('Bill', BillSchema);

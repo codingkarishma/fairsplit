@@ -1,8 +1,10 @@
 const express = require('express');
 const { nanoid } = require('nanoid');
+const mongoose = require('mongoose');
 const Bill = require('../models/Bill');
 const Item = require('../models/Item');
 const Participant = require('../models/Participant');
+const { calculateBillTotals } = require('../services/totals.service');
 
 const router = express.Router();
 
@@ -11,12 +13,49 @@ async function withDetails(bill) {
     Item.find({ billId: bill._id }),
     Participant.find({ billId: bill._id }),
   ]);
-  return { ...bill.toObject(), items, participants };
+  const billDetails = bill.toObject();
+  delete billDetails.hostCode;
+  return { ...billDetails, items, participants };
+}
+
+function hostCodeMatches(req, bill) {
+  return (
+    Boolean(req.get('X-Host-Code')) && req.get('X-Host-Code') === bill.hostCode
+  );
+}
+
+function shareCodeMatches(req, bill) {
+  const shareCode = req.body.shareCode || req.get('X-Share-Code');
+  return Boolean(shareCode) && shareCode === bill.shareCode;
+}
+
+async function findBillForParticipantAction(req, res) {
+  const bill = await Bill.findById(req.params.id);
+  if (!bill) {
+    res.status(404).json({ error: 'Bill not found' });
+    return null;
+  }
+  if (!shareCodeMatches(req, bill)) {
+    res.status(403).json({ error: 'Invalid share code' });
+    return null;
+  }
+  if (bill.status === 'closed') {
+    res
+      .status(409)
+      .json({ error: 'Bill is closed, no further changes allowed' });
+    return null;
+  }
+  if (bill.status !== 'open') {
+    res.status(409).json({ error: 'Bill is not open for claims' });
+    return null;
+  }
+  return bill;
 }
 
 router.post('/', async (req, res) => {
   try {
-    const { hostName, restaurantName, taxAmount, tipAmount } = req.body;
+    const { hostName, restaurantName, taxAmount, tipAmount, currency } =
+      req.body;
     if (!hostName)
       return res.status(400).json({ error: 'hostName is required' });
     const bill = await Bill.create({
@@ -24,8 +63,10 @@ router.post('/', async (req, res) => {
       restaurantName,
       taxAmount,
       tipAmount,
+      currency,
       status: 'draft',
       shareCode: nanoid(6),
+      hostCode: nanoid(12),
     });
     res.status(201).json(bill);
   } catch (err) {
@@ -58,6 +99,11 @@ router.get('/:id', async (req, res) => {
 
 router.post('/:id/publish', async (req, res) => {
   try {
+    const existingBill = await Bill.findById(req.params.id);
+    if (!existingBill) return res.status(404).json({ error: 'Bill not found' });
+    if (!hostCodeMatches(req, existingBill)) {
+      return res.status(403).json({ error: 'Invalid host code' });
+    }
     const bill = await Bill.findOneAndUpdate(
       { _id: req.params.id, status: 'draft' },
       { status: 'open' },
@@ -82,6 +128,211 @@ router.post('/:id/participants', async (req, res) => {
   } catch (err) {
     console.error('Participant creation failed:', err);
     res.status(500).json({ error: 'Failed to add participant' });
+  }
+});
+
+router.post('/:id/items/:itemId/claim', async (req, res) => {
+  try {
+    const bill = await findBillForParticipantAction(req, res);
+    if (!bill) return;
+
+    const { participantId, customAmountCents = null } = req.body;
+    if (!mongoose.Types.ObjectId.isValid(participantId)) {
+      return res.status(400).json({ error: 'Valid participantId is required' });
+    }
+    if (
+      customAmountCents !== null &&
+      (!Number.isInteger(customAmountCents) || customAmountCents < 0)
+    ) {
+      return res.status(400).json({
+        error: 'customAmountCents must be a non-negative integer or null',
+      });
+    }
+    const participant = await Participant.findOne({
+      _id: participantId,
+      billId: bill._id,
+    });
+    if (!participant) {
+      return res.status(404).json({ error: 'Participant not found' });
+    }
+
+    const item = await Item.findOneAndUpdate(
+      {
+        _id: req.params.itemId,
+        billId: bill._id,
+        'claims.participantId': { $ne: participant._id },
+        $expr: {
+          $lte: [
+            {
+              $add: [
+                {
+                  $sum: {
+                    $map: {
+                      input: { $ifNull: ['$claims', []] },
+                      as: 'claim',
+                      in: { $ifNull: ['$$claim.customAmountCents', 0] },
+                    },
+                  },
+                },
+                customAmountCents === null ? 0 : customAmountCents,
+              ],
+            },
+            { $multiply: ['$price', 100] },
+          ],
+        },
+      },
+      {
+        $push: {
+          claims: {
+            participantId: participant._id,
+            customAmountCents,
+          },
+        },
+      },
+      { new: true },
+    );
+    if (!item) {
+      const existingItem = await Item.findOne({
+        _id: req.params.itemId,
+        billId: bill._id,
+      });
+      if (!existingItem)
+        return res.status(404).json({ error: 'Item not found' });
+      if (
+        existingItem.claims.some((claim) =>
+          claim.participantId.equals(participant._id),
+        )
+      ) {
+        return res.status(409).json({
+          error: 'Item already claimed by participant or not found',
+        });
+      }
+      return res.status(400).json({
+        error: 'Custom amount would exceed remaining item price',
+      });
+    }
+    return res.json(item);
+  } catch (err) {
+    console.error('Item claim failed:', err);
+    return res.status(500).json({ error: 'Failed to claim item' });
+  }
+});
+
+router.post('/:id/items/:itemId/unclaim', async (req, res) => {
+  try {
+    const bill = await findBillForParticipantAction(req, res);
+    if (!bill) return;
+
+    const { participantId } = req.body;
+    if (!mongoose.Types.ObjectId.isValid(participantId)) {
+      return res.status(400).json({ error: 'Valid participantId is required' });
+    }
+    const participant = await Participant.findOne({
+      _id: participantId,
+      billId: bill._id,
+    });
+    if (!participant) {
+      return res.status(404).json({ error: 'Participant not found' });
+    }
+
+    const item = await Item.findOneAndUpdate(
+      { _id: req.params.itemId, billId: bill._id },
+      { $pull: { claims: { participantId: participant._id } } },
+      { new: true },
+    );
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    return res.json(item);
+  } catch (err) {
+    console.error('Item unclaim failed:', err);
+    return res.status(500).json({ error: 'Failed to unclaim item' });
+  }
+});
+
+router.patch('/:id/items/:itemId', async (req, res) => {
+  try {
+    const bill = await Bill.findById(req.params.id);
+    if (!bill) return res.status(404).json({ error: 'Bill not found' });
+    if (!hostCodeMatches(req, bill)) {
+      return res.status(403).json({ error: 'Invalid host code' });
+    }
+    if (bill.status !== 'draft') {
+      return res.status(409).json({
+        error: 'Items can only be edited before the bill is published',
+      });
+    }
+
+    const allowedFields = ['name', 'price', 'quantity'];
+    const updates = Object.fromEntries(
+      allowedFields
+        .filter((field) => req.body[field] !== undefined)
+        .map((field) => [field, req.body[field]]),
+    );
+    if (Object.keys(updates).length === 0) {
+      return res
+        .status(400)
+        .json({ error: 'At least one item field is required' });
+    }
+
+    const item = await Item.findOneAndUpdate(
+      { _id: req.params.itemId, billId: bill._id },
+      { $set: updates },
+      { new: true, runValidators: true },
+    );
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    return res.json(item);
+  } catch (err) {
+    console.error('Item edit failed:', err);
+    return res.status(500).json({ error: 'Failed to edit item' });
+  }
+});
+
+router.post('/:id/close', async (req, res) => {
+  try {
+    const bill = await Bill.findById(req.params.id);
+    if (!bill) return res.status(404).json({ error: 'Bill not found' });
+    if (!hostCodeMatches(req, bill)) {
+      return res.status(403).json({ error: 'Invalid host code' });
+    }
+    if (bill.status === 'closed') {
+      return res.status(409).json({ error: 'Bill is already closed' });
+    }
+    if (bill.status !== 'open') {
+      return res.status(409).json({ error: 'Only open bills can be closed' });
+    }
+
+    const [items, participants] = await Promise.all([
+      Item.find({ billId: bill._id }),
+      Participant.find({ billId: bill._id }),
+    ]);
+    let totals;
+    try {
+      totals = calculateBillTotals({
+        items,
+        participants,
+        taxAmount: bill.taxAmount,
+        tipAmount: bill.tipAmount,
+      });
+    } catch (err) {
+      if (err.message === 'Cannot finalize a bill with no participants') {
+        return res.status(400).json({ error: err.message });
+      }
+      throw err;
+    }
+
+    const closedBill = await Bill.findOneAndUpdate(
+      { _id: bill._id, status: 'open' },
+      { status: 'closed' },
+      { new: true },
+    );
+    if (!closedBill) {
+      return res
+        .status(409)
+        .json({ error: 'Bill status changed before closing' });
+    }
+    return res.json({ bill: closedBill, totals, breakdown: totals.breakdown });
+  } catch (err) {
+    console.error('Bill close failed:', err);
+    return res.status(500).json({ error: 'Failed to close bill' });
   }
 });
 

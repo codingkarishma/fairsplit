@@ -5,9 +5,8 @@ const { Schema } = mongoose;
 // `price` is the TOTAL line amount as printed on the receipt.
 // `quantity` is how many units that line contains.
 //
-// claims: array of participant claims. claims.length must NEVER
-// exceed quantity. This is enforced atomically at the DB write
-// level (via $expr + findOneAndUpdate), not in the frontend.
+// claims: array of participant claims. Any participant may claim
+// this item regardless of its quantity; quantity is informational only.
 const ItemSchema = new Schema({
   billId: { type: Schema.Types.ObjectId, ref: 'Bill', required: true },
 
@@ -22,12 +21,16 @@ const ItemSchema = new Schema({
   quantity: { type: Number, required: true, default: 1 },
 
   // Who has claimed this item. Each entry = one participant's claim.
-  // claims.length must never exceed quantity — enforced atomically
-  // in the claim handler via findOneAndUpdate with $expr check.
-  claims: [{
-    participantId: { type: Schema.Types.ObjectId, ref: 'Participant' },
-    claimedAt: { type: Date, default: Date.now },
-  }],
+  claims: [
+    {
+      participantId: { type: Schema.Types.ObjectId, ref: 'Participant' },
+      claimedAt: { type: Date, default: Date.now },
+      customAmountCents: {
+        type: Number,
+        default: null,
+      },
+    },
+  ],
 });
 
 module.exports = mongoose.model('Item', ItemSchema);
