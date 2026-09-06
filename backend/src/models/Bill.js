@@ -13,8 +13,8 @@ const BillSchema = new Schema({
   // Best-effort name from OCR; host can correct during review.
   restaurantName: { type: String },
 
-  // Tax/tip added by host during review; split proportionally later.
-  taxAmount: { type: Number, default: 0 },
+// Tax/tip added by host during review (in whole currency units, e.g., 20 = ₹20).
+// Split EVENLY across all participants (rule 14), not proportionally.  taxAmount: { type: Number, default: 0 },
   tipAmount: { type: Number, default: 0 },
 
   // All bill amounts use this currency and its minor units.
