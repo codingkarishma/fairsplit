@@ -61,7 +61,7 @@ function calculateBillTotals({
     const claimantIds = sortedParticipantIds([...claimsByParticipant.keys()]);
 
     if (claimantIds.length > 0) {
-      const itemCents = toCents(item.price);
+      const itemCents = item.priceCents;
       const customClaims = claimantIds.filter(
         (participantId) =>
           claimsByParticipant.get(participantId).customAmountCents !== null &&
@@ -93,10 +93,12 @@ function calculateBillTotals({
       if (defaultClaimants.length > 0) {
         addSplit(remainingCents, defaultClaimants, claimedTotals);
       } else if (remainingCents !== 0) {
-        throw new Error('Custom claim amounts must cover the full item price');
+        throw new Error(
+          `Item "${item.name}": custom claim amounts must cover the full item price, or leave at least one claimant unset to absorb the remainder.`,
+        );
       }
     } else {
-      addSplit(toCents(item.price), allocationParticipantIds, unclaimedTotals);
+      addSplit(item.priceCents, allocationParticipantIds, unclaimedTotals);
     }
   }
 
