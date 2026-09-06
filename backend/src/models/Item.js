@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 // Item = one line on the receipt, e.g. "2x Fries — $10.00".
-// `price` is the TOTAL line amount as printed on the receipt.
+// `priceCents` is the TOTAL line amount in integer cents.
 // `quantity` is how many units that line contains.
 //
 // claims: array of participant claims. Any participant may claim
@@ -13,9 +13,16 @@ const ItemSchema = new Schema({
   // OCR-extracted name; host reviews and corrects before publishing.
   name: { type: String, required: true },
 
-  // TOTAL price for this line as printed on the receipt.
-  // E.g. "2x Fries at $5 each" → price: 10, quantity: 2.
-  price: { type: Number, required: true },
+  // E.g. "2x Fries at $5 each" → priceCents: 1000, quantity: 2.
+  priceCents: {
+    type: Number,
+    required: true,
+    min: 0,
+    validate: {
+      validator: Number.isInteger,
+      message: 'priceCents must be a non-negative integer',
+    },
+  },
 
   // How many units this line represents.
   quantity: { type: Number, required: true, default: 1 },

@@ -56,6 +56,9 @@ router.post('/', async (req, res) => {
   try {
     const { hostName, restaurantName, taxAmount, tipAmount, currency } =
       req.body;
+    if (currency !== undefined && !['INR', 'GBP', 'USD'].includes(currency)) {
+      return res.status(400).json({ error: 'Invalid currency' });
+    }
     if (!hostName)
       return res.status(400).json({ error: 'hostName is required' });
     const bill = await Bill.create({
@@ -122,6 +125,12 @@ router.post('/:id/participants', async (req, res) => {
     const { name } = req.body;
     const bill = await Bill.findById(req.params.id);
     if (!bill) return res.status(404).json({ error: 'Bill not found' });
+    if (!shareCodeMatches(req, bill)) {
+      return res.status(403).json({ error: 'Invalid share code' });
+    }
+    if (bill.status !== 'open') {
+      return res.status(409).json({ error: 'Bill is not open for joining' });
+    }
     if (!name) return res.status(400).json({ error: 'name is required' });
     const participant = await Participant.create({ billId: bill._id, name });
     res.status(201).json(participant);
@@ -177,7 +186,7 @@ router.post('/:id/items/:itemId/claim', async (req, res) => {
                 customAmountCents === null ? 0 : customAmountCents,
               ],
             },
-            { $multiply: ['$price', 100] },
+            '$priceCents',
           ],
         },
       },
@@ -261,7 +270,7 @@ router.patch('/:id/items/:itemId', async (req, res) => {
       });
     }
 
-    const allowedFields = ['name', 'price', 'quantity'];
+    const allowedFields = ['name', 'priceCents', 'quantity'];
     const updates = Object.fromEntries(
       allowedFields
         .filter((field) => req.body[field] !== undefined)
@@ -300,6 +309,17 @@ router.post('/:id/close', async (req, res) => {
       return res.status(409).json({ error: 'Only open bills can be closed' });
     }
 
+    const closedBill = await Bill.findOneAndUpdate(
+      { _id: bill._id, status: 'open' },
+      { status: 'closed' },
+      { new: true },
+    );
+    if (!closedBill) {
+      return res
+        .status(409)
+        .json({ error: 'Bill status changed before closing' });
+    }
+
     const [items, participants] = await Promise.all([
       Item.find({ billId: bill._id }),
       Participant.find({ billId: bill._id }),
@@ -319,16 +339,6 @@ router.post('/:id/close', async (req, res) => {
       throw err;
     }
 
-    const closedBill = await Bill.findOneAndUpdate(
-      { _id: bill._id, status: 'open' },
-      { status: 'closed' },
-      { new: true },
-    );
-    if (!closedBill) {
-      return res
-        .status(409)
-        .json({ error: 'Bill status changed before closing' });
-    }
     return res.json({ bill: closedBill, totals, breakdown: totals.breakdown });
   } catch (err) {
     console.error('Bill close failed:', err);
