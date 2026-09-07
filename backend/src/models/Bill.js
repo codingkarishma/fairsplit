@@ -21,6 +21,10 @@ const BillSchema = new Schema({
   // All bill amounts use this currency and its minor units.
   currency: { type: String, enum: ['INR', 'GBP', 'USD'], default: 'INR' },
 
+  // Host's UPI ID for payment links. Loosely validated (name@bank shape)
+  // at creation time. Only used when currency is 'INR'.
+  hostUpiId: { type: String, required: false },
+
   // Lifecycle state:
   //   draft  — bill created, not published yet
   //   open   — published, participants can join and claim

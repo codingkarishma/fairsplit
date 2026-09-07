@@ -54,19 +54,30 @@ async function findBillForParticipantAction(req, res) {
 
 router.post('/', async (req, res) => {
   try {
-    const { hostName, restaurantName, taxAmount, tipAmount, currency } =
+    const { hostName, restaurantName, taxAmount, tipAmount, currency, hostUpiId } =
       req.body;
     if (currency !== undefined && !['INR', 'GBP', 'USD'].includes(currency)) {
       return res.status(400).json({ error: 'Invalid currency' });
     }
     if (!hostName)
       return res.status(400).json({ error: 'hostName is required' });
+
+    if (hostUpiId !== undefined && hostUpiId !== null && hostUpiId !== '') {
+      const upiPattern = /^[\w.-]+@[\w.-]+$/;
+      if (!upiPattern.test(hostUpiId)) {
+        return res.status(400).json({
+          error: "hostUpiId doesn't look like a valid UPI ID, expected format: name@bank",
+        });
+      }
+    }
+
     const bill = await Bill.create({
       hostName,
       restaurantName,
       taxAmount,
       tipAmount,
       currency,
+      hostUpiId,
       status: 'draft',
       shareCode: nanoid(6),
       hostCode: nanoid(12),
@@ -339,7 +350,27 @@ router.post('/:id/close', async (req, res) => {
       throw err;
     }
 
-    return res.json({ bill: closedBill, totals, breakdown: totals.breakdown });
+    // UPI links are only generated for INR bills — UPI itself does not
+    // support GBP/USD settlement, this is not a missing feature.
+    const { hostUpiId, hostName, currency, _id: billId } = closedBill;
+
+    const breakdownWithUpi = totals.breakdown.map((entry) => {
+      let upiLink = null;
+
+      if (
+        currency === 'INR' &&
+        hostUpiId &&
+        entry.finalTotalCents > 0
+      ) {
+        const amount = (entry.finalTotalCents / 100).toFixed(2);
+        const encodedHostName = encodeURIComponent(hostName);
+        upiLink = `upi://pay?pa=${hostUpiId}&pn=${encodedHostName}&am=${amount}&cu=INR&tn=FairSplit:${billId}`;
+      }
+
+      return { ...entry, upiLink };
+    });
+
+    return res.json({ bill: closedBill, totals, breakdown: breakdownWithUpi });
   } catch (err) {
     console.error('Bill close failed:', err);
     return res.status(500).json({ error: 'Failed to close bill' });
