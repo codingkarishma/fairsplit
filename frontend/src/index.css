@@ -1,1 +1,59 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #f5f3ef;
+}
+
+.sonner-toast {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+}
+
+:focus-visible {
+  outline: 3px solid #e8a838;
+  outline-offset: 3px;
+}
+
+/* Georgia for headlines only */
+h1,
+h2,
+h3 {
+  font-family: 'Georgia', 'Times New Roman', serif;
+}
+
+/* Smooth transitions */
+button,
+input,
+select {
+  transition: all 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+input:focus,
+select:focus {
+  border-color: #e8a838 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

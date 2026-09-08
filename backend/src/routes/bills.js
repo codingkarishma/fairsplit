@@ -54,8 +54,16 @@ async function findBillForParticipantAction(req, res) {
 
 router.post('/', async (req, res) => {
   try {
-    const { hostName, restaurantName, taxAmount, tipAmount, currency, hostUpiId } =
-      req.body;
+    const {
+      hostName,
+      restaurantName,
+      taxAmount,
+      tipAmount,
+      taxPercent,
+      tipPercent,
+      currency,
+      hostUpiId,
+    } = req.body;
     if (currency !== undefined && !['INR', 'GBP', 'USD'].includes(currency)) {
       return res.status(400).json({ error: 'Invalid currency' });
     }
@@ -66,7 +74,8 @@ router.post('/', async (req, res) => {
       const upiPattern = /^[\w.-]+@[\w.-]+$/;
       if (!upiPattern.test(hostUpiId)) {
         return res.status(400).json({
-          error: "hostUpiId doesn't look like a valid UPI ID, expected format: name@bank",
+          error:
+            "hostUpiId doesn't look like a valid UPI ID, expected format: name@bank",
         });
       }
     }
@@ -76,6 +85,8 @@ router.post('/', async (req, res) => {
       restaurantName,
       taxAmount,
       tipAmount,
+      taxPercent,
+      tipPercent,
       currency,
       hostUpiId,
       status: 'draft',
@@ -306,6 +317,39 @@ router.patch('/:id/items/:itemId', async (req, res) => {
   }
 });
 
+router.post('/:id/items', async (req, res) => {
+  try {
+    const bill = await Bill.findById(req.params.id);
+    if (!bill) return res.status(404).json({ error: 'Bill not found' });
+    if (!hostCodeMatches(req, bill)) {
+      return res.status(403).json({ error: 'Invalid host code' });
+    }
+    if (bill.status !== 'draft') {
+      return res.status(409).json({
+        error: 'Items can only be added before the bill is published',
+      });
+    }
+
+    const { name, priceCents, quantity = 1 } = req.body;
+    if (!name || !Number.isInteger(priceCents) || priceCents < 0) {
+      return res.status(400).json({
+        error: 'name and a non-negative integer priceCents are required',
+      });
+    }
+
+    const item = await Item.create({
+      billId: bill._id,
+      name,
+      priceCents,
+      quantity,
+    });
+    return res.status(201).json(item);
+  } catch (err) {
+    console.error('Item creation failed:', err);
+    return res.status(500).json({ error: 'Failed to add item' });
+  }
+});
+
 router.post('/:id/close', async (req, res) => {
   try {
     const bill = await Bill.findById(req.params.id);
@@ -342,6 +386,8 @@ router.post('/:id/close', async (req, res) => {
         participants,
         taxAmount: bill.taxAmount,
         tipAmount: bill.tipAmount,
+        taxPercent: bill.taxPercent,
+        tipPercent: bill.tipPercent,
       });
     } catch (err) {
       if (err.message === 'Cannot finalize a bill with no participants') {
@@ -357,11 +403,7 @@ router.post('/:id/close', async (req, res) => {
     const breakdownWithUpi = totals.breakdown.map((entry) => {
       let upiLink = null;
 
-      if (
-        currency === 'INR' &&
-        hostUpiId &&
-        entry.finalTotalCents > 0
-      ) {
+      if (currency === 'INR' && hostUpiId && entry.finalTotalCents > 0) {
         const amount = (entry.finalTotalCents / 100).toFixed(2);
         const encodedHostName = encodeURIComponent(hostName);
         upiLink = `upi://pay?pa=${hostUpiId}&pn=${encodedHostName}&am=${amount}&cu=INR&tn=FairSplit:${billId}`;

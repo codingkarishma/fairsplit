@@ -6,8 +6,14 @@ export function LoadingSpinner({ size = 'md', className = '' }) {
   };
 
   return (
-    <div className={`flex items-center justify-center py-12 ${className}`}>
-      <div className={`${sizes[size] || sizes.md} border-4 border-blue-600 border-t-transparent rounded-full animate-spin`} />
+    <div
+      className={`flex items-center justify-center py-12 ${className}`}
+      role="status"
+      aria-label="Loading"
+    >
+      <div
+        className={`${sizes[size] || sizes.md} animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600`}
+      />
     </div>
   );
 }

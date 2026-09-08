@@ -28,7 +28,11 @@ export function useBill(billId) {
   }, [billId]);
 
   useEffect(() => {
-    fetchBill();
+    const request = Promise.resolve().then(fetchBill);
+
+    return () => {
+      request.catch(() => {});
+    };
   }, [fetchBill]);
 
   return { bill, loading, error, refetch: fetchBill };

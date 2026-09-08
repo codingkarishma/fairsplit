@@ -17,6 +17,8 @@ const BillSchema = new Schema({
   // Converted to cents inside totals.service.js.
   taxAmount: { type: Number, default: 0 },
   tipAmount: { type: Number, default: 0 },
+  taxPercent: { type: Number, default: 0, min: 0, max: 100 },
+  tipPercent: { type: Number, default: 0, min: 0, max: 100 },
 
   // All bill amounts use this currency and its minor units.
   currency: { type: String, enum: ['INR', 'GBP', 'USD'], default: 'INR' },

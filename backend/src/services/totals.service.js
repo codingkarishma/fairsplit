@@ -10,6 +10,10 @@ function toCents(price) {
   return Math.round(numericPrice * 100);
 }
 
+function percentToCents(subtotalCents, percent) {
+  return Math.round((subtotalCents * Number(percent || 0)) / 100);
+}
+
 function participantIdsInBillOrder(participants) {
   return participants.map(toParticipantId);
 }
@@ -37,6 +41,8 @@ function calculateBillTotals({
   participants,
   taxAmount = 0,
   tipAmount = 0,
+  taxPercent,
+  tipPercent,
 }) {
   const participantIds = participantIdsInBillOrder(participants);
   if (participantIds.length === 0) {
@@ -49,6 +55,7 @@ function calculateBillTotals({
   const unclaimedTotals = new Map(participantIds.map((id) => [id, 0]));
   const taxTotals = new Map(participantIds.map((id) => [id, 0]));
   const tipTotals = new Map(participantIds.map((id) => [id, 0]));
+  const subtotalCents = items.reduce((sum, item) => sum + item.priceCents, 0);
 
   for (const item of items) {
     const claimsByParticipant = new Map();
@@ -102,8 +109,20 @@ function calculateBillTotals({
     }
   }
 
-  addSplit(toCents(taxAmount), allocationParticipantIds, taxTotals);
-  addSplit(toCents(tipAmount), allocationParticipantIds, tipTotals);
+  addSplit(
+    taxPercent === undefined
+      ? toCents(taxAmount)
+      : percentToCents(subtotalCents, taxPercent),
+    allocationParticipantIds,
+    taxTotals,
+  );
+  addSplit(
+    tipPercent === undefined
+      ? toCents(tipAmount)
+      : percentToCents(subtotalCents, tipPercent),
+    allocationParticipantIds,
+    tipTotals,
+  );
 
   const toOutput = (totals) =>
     participantIds.map((participantId) => ({

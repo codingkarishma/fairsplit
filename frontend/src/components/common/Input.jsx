@@ -12,7 +12,10 @@ export function Input({
   return (
     <div className={`mb-4 ${className}`}>
       {label && (
-        <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">
+        <label
+          htmlFor={name}
+          className="mb-1.5 block text-sm font-semibold text-slate-700"
+        >
           {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
@@ -23,8 +26,8 @@ export function Input({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition ${
-          error ? 'border-red-500' : 'border-gray-300'
+        className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 ${
+          error ? 'border-red-500' : 'border-slate-200'
         }`}
       />
       {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
