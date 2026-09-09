@@ -29,6 +29,22 @@ function shareCodeMatches(req, bill) {
   return Boolean(shareCode) && shareCode === bill.shareCode;
 }
 
+function isInvalidId(req, res) {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    res.status(400).json({ error: 'Invalid bill id' });
+    return true;
+  }
+  return false;
+}
+
+function isInvalidItemId(req, res) {
+  if (!mongoose.Types.ObjectId.isValid(req.params.itemId)) {
+    res.status(400).json({ error: 'Invalid item id' });
+    return true;
+  }
+  return false;
+}
+
 async function findBillForParticipantAction(req, res) {
   const bill = await Bill.findById(req.params.id);
   if (!bill) {
@@ -57,8 +73,6 @@ router.post('/', async (req, res) => {
     const {
       hostName,
       restaurantName,
-      taxAmount,
-      tipAmount,
       taxPercent,
       tipPercent,
       currency,
@@ -83,8 +97,6 @@ router.post('/', async (req, res) => {
     const bill = await Bill.create({
       hostName,
       restaurantName,
-      taxAmount,
-      tipAmount,
       taxPercent,
       tipPercent,
       currency,
@@ -112,6 +124,7 @@ router.get('/join/:shareCode', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
+  if (isInvalidId(req, res)) return;
   try {
     const bill = await Bill.findById(req.params.id);
     if (!bill) return res.status(404).json({ error: 'Bill not found' });
@@ -123,11 +136,18 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/:id/publish', async (req, res) => {
+  if (isInvalidId(req, res)) return;
   try {
     const existingBill = await Bill.findById(req.params.id);
     if (!existingBill) return res.status(404).json({ error: 'Bill not found' });
     if (!hostCodeMatches(req, existingBill)) {
       return res.status(403).json({ error: 'Invalid host code' });
+    }
+    if (existingBill.status === 'open') {
+      return res.status(409).json({ error: 'Bill is already published' });
+    }
+    if (existingBill.status === 'closed') {
+      return res.status(409).json({ error: 'Bill is already closed' });
     }
     const bill = await Bill.findOneAndUpdate(
       { _id: req.params.id, status: 'draft' },
@@ -143,6 +163,7 @@ router.post('/:id/publish', async (req, res) => {
 });
 
 router.post('/:id/participants', async (req, res) => {
+  if (isInvalidId(req, res)) return;
   try {
     const { name } = req.body;
     const bill = await Bill.findById(req.params.id);
@@ -163,6 +184,7 @@ router.post('/:id/participants', async (req, res) => {
 });
 
 router.post('/:id/items/:itemId/claim', async (req, res) => {
+  if (isInvalidId(req, res) || isInvalidItemId(req, res)) return;
   try {
     const bill = await findBillForParticipantAction(req, res);
     if (!bill) return;
@@ -235,7 +257,7 @@ router.post('/:id/items/:itemId/claim', async (req, res) => {
         )
       ) {
         return res.status(409).json({
-          error: 'Item already claimed by participant or not found',
+          error: 'Item already claimed by this participant',
         });
       }
       return res.status(400).json({
@@ -250,6 +272,7 @@ router.post('/:id/items/:itemId/claim', async (req, res) => {
 });
 
 router.post('/:id/items/:itemId/unclaim', async (req, res) => {
+  if (isInvalidId(req, res) || isInvalidItemId(req, res)) return;
   try {
     const bill = await findBillForParticipantAction(req, res);
     if (!bill) return;
@@ -279,7 +302,57 @@ router.post('/:id/items/:itemId/unclaim', async (req, res) => {
   }
 });
 
+router.patch('/:id/items', async (req, res) => {
+  if (isInvalidId(req, res)) return;
+  try {
+    const bill = await Bill.findById(req.params.id);
+    if (!bill) return res.status(404).json({ error: 'Bill not found' });
+    if (!hostCodeMatches(req, bill)) {
+      return res.status(403).json({ error: 'Invalid host code' });
+    }
+    if (bill.status !== 'draft') {
+      return res.status(409).json({
+        error: 'Items can only be edited before the bill is published',
+      });
+    }
+
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'items must be a non-empty array' });
+    }
+
+    const normalizedItems = items.map((item) => ({
+      billId: bill._id,
+      name: typeof item.name === 'string' ? item.name.trim() : '',
+      priceCents: item.priceCents,
+      quantity: item.quantity === undefined ? 1 : item.quantity,
+    }));
+    const invalidItem = normalizedItems.find(
+      (item) =>
+        !item.name ||
+        !Number.isInteger(item.priceCents) ||
+        item.priceCents <= 0 ||
+        !Number.isInteger(item.quantity) ||
+        item.quantity <= 0,
+    );
+    if (invalidItem) {
+      return res.status(400).json({
+        error:
+          'Each item requires a non-empty name, a positive integer priceCents, and a positive integer quantity',
+      });
+    }
+
+    await Item.deleteMany({ billId: bill._id });
+    const created = await Item.insertMany(normalizedItems);
+    return res.status(201).json({ items: created });
+  } catch (err) {
+    console.error('Bulk item replacement failed:', err);
+    return res.status(500).json({ error: 'Failed to replace bill items' });
+  }
+});
+
 router.patch('/:id/items/:itemId', async (req, res) => {
+  if (isInvalidId(req, res) || isInvalidItemId(req, res)) return;
   try {
     const bill = await Bill.findById(req.params.id);
     if (!bill) return res.status(404).json({ error: 'Bill not found' });
@@ -318,6 +391,7 @@ router.patch('/:id/items/:itemId', async (req, res) => {
 });
 
 router.post('/:id/items', async (req, res) => {
+  if (isInvalidId(req, res)) return;
   try {
     const bill = await Bill.findById(req.params.id);
     if (!bill) return res.status(404).json({ error: 'Bill not found' });
@@ -351,6 +425,7 @@ router.post('/:id/items', async (req, res) => {
 });
 
 router.post('/:id/close', async (req, res) => {
+  if (isInvalidId(req, res)) return;
   try {
     const bill = await Bill.findById(req.params.id);
     if (!bill) return res.status(404).json({ error: 'Bill not found' });
@@ -384,8 +459,6 @@ router.post('/:id/close', async (req, res) => {
       totals = calculateBillTotals({
         items,
         participants,
-        taxAmount: bill.taxAmount,
-        tipAmount: bill.tipAmount,
         taxPercent: bill.taxPercent,
         tipPercent: bill.tipPercent,
       });
@@ -412,7 +485,17 @@ router.post('/:id/close', async (req, res) => {
       return { ...entry, upiLink };
     });
 
-    return res.json({ bill: closedBill, totals, breakdown: breakdownWithUpi });
+    const billWithBreakdown = await Bill.findByIdAndUpdate(
+      bill._id,
+      { finalBreakdown: breakdownWithUpi },
+      { new: true },
+    );
+
+    return res.json({
+      bill: billWithBreakdown,
+      totals,
+      breakdown: breakdownWithUpi,
+    });
   } catch (err) {
     console.error('Bill close failed:', err);
     return res.status(500).json({ error: 'Failed to close bill' });

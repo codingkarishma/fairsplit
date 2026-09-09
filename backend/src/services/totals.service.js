@@ -2,14 +2,6 @@ function toParticipantId(participant) {
   return String(participant._id || participant.participantId || participant);
 }
 
-function toCents(price) {
-  const numericPrice = Number(price);
-  if (!Number.isFinite(numericPrice) || numericPrice < 0) {
-    throw new Error('Item price must be a non-negative number');
-  }
-  return Math.round(numericPrice * 100);
-}
-
 function percentToCents(subtotalCents, percent) {
   return Math.round((subtotalCents * Number(percent || 0)) / 100);
 }
@@ -39,8 +31,6 @@ function addSplit(totalCents, participantIds, totals) {
 function calculateBillTotals({
   items,
   participants,
-  taxAmount = 0,
-  tipAmount = 0,
   taxPercent,
   tipPercent,
 }) {
@@ -109,17 +99,14 @@ function calculateBillTotals({
     }
   }
 
+  // Tax and tip are always calculated from percentages now
   addSplit(
-    taxPercent === undefined
-      ? toCents(taxAmount)
-      : percentToCents(subtotalCents, taxPercent),
+    percentToCents(subtotalCents, taxPercent),
     allocationParticipantIds,
     taxTotals,
   );
   addSplit(
-    tipPercent === undefined
-      ? toCents(tipAmount)
-      : percentToCents(subtotalCents, tipPercent),
+    percentToCents(subtotalCents, tipPercent),
     allocationParticipantIds,
     tipTotals,
   );

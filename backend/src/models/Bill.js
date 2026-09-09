@@ -13,10 +13,7 @@ const BillSchema = new Schema({
   // Best-effort name from OCR; host can correct during review.
   restaurantName: { type: String },
 
-  // Tax/tip amount in whole currency units (e.g., 20 = ₹20).
-  // Converted to cents inside totals.service.js.
-  taxAmount: { type: Number, default: 0 },
-  tipAmount: { type: Number, default: 0 },
+  // Tax/tip as percentage; amount fields are dead code since taxPercent defaults to 0.
   taxPercent: { type: Number, default: 0, min: 0, max: 100 },
   tipPercent: { type: Number, default: 0, min: 0, max: 100 },
 
@@ -44,6 +41,9 @@ const BillSchema = new Schema({
 
   // Secret code used for host-only actions.
   hostCode: { type: String, required: true },
+
+  // Final breakdown computed at close time and persisted for re-renders.
+  finalBreakdown: { type: Array, default: null },
 });
 
 module.exports = mongoose.model('Bill', BillSchema);

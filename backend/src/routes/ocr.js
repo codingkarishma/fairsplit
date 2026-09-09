@@ -56,6 +56,12 @@ router.post('/extract', upload.single('receipt'), async (req, res) => {
   } catch (err) {
     console.error('OCR extraction failed:', err);
     res.status(500).json({ error: 'Failed to process receipt image' });
+  } finally {
+    fs.unlink(req.file.path, (unlinkError) => {
+      if (unlinkError) {
+        console.error('Failed to remove uploaded receipt:', unlinkError);
+      }
+    });
   }
 });
 
