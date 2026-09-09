@@ -18,7 +18,8 @@ async function request(endpoint, options = {}) {
   if (!res.ok) {
     const error = new Error(data.error || data.message || 'Request failed');
     error.status = res.status;
-    error.response = { data };
+    error.body = data;
+    error.response = { data, status: res.status };
     throw error;
   }
 
@@ -37,6 +38,16 @@ export const api = {
   getBill: (id) => request(`/bills/${id}`),
 
   getBillByShareCode: (shareCode) => request(`/bills/join/${shareCode}`),
+
+  updateBillItems: (billId, hostCode, items) =>
+    request(`/bills/${billId}/items`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Host-Code': hostCode,
+      },
+      body: JSON.stringify({ items }),
+    }),
 
   updateBillItem: (billId, itemId, hostCode, item) =>
     request(`/bills/${billId}/items/${itemId}`, {
