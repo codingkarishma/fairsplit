@@ -28,6 +28,7 @@ export default function HostPage() {
   const [currency, setCurrency] = useState('INR');
   const [taxPercent, setTaxPercent] = useState(0);
   const [tipPercent, setTipPercent] = useState(0);
+  const [hostUpiId, setHostUpiId] = useState('');
   const [items, setItems] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -50,6 +51,7 @@ export default function HostPage() {
         currency,
         taxPercent: Number(taxPercent),
         tipPercent: Number(tipPercent),
+        hostUpiId: hostUpiId || undefined,
       });
       setBill(created);
       setStep('upload');
@@ -77,13 +79,15 @@ export default function HostPage() {
   const saveItems = async () => {
     setLoading(true);
     try {
-      for (const item of items) {
-        await api.addBillItem(bill._id, bill.hostCode, {
+      await api.updateBillItems(
+        bill._id,
+        bill.hostCode,
+        items.map((item) => ({
           name: item.name,
           priceCents: Math.round(Number(item.priceCents) || 0),
           quantity: Number(item.quantity) || 1,
-        });
-      }
+        })),
+      );
       await api.publishBill(bill._id, bill.hostCode);
       setStep('published');
       showToast('Bill published');
@@ -157,6 +161,12 @@ export default function HostPage() {
               </select>
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Host UPI ID"
+                name="hostUpiId"
+                value={hostUpiId}
+                onChange={(event) => setHostUpiId(event.target.value)}
+              />
               <Input
                 label="Tax %"
                 name="taxPercent"

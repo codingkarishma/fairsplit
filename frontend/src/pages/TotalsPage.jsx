@@ -8,7 +8,6 @@ import { useBill } from '../hooks/useBill';
 import { useToast } from '../hooks/useToast';
 import { formatCurrency } from '../utils/currency';
 import { getAvatarColor, getInitials } from '../utils/avatar';
-import { personBreakdown } from '../utils/split';
 
 export default function TotalsPage() {
   const { billId } = useParams();
@@ -22,15 +21,46 @@ export default function TotalsPage() {
       <ErrorMessage message={error || 'Bill not found'} onRetry={refetch} />
     );
 
-  const breakdown = personBreakdown(bill);
-  const subtotal =
-    bill.items?.reduce((sum, item) => sum + item.priceCents, 0) || 0;
-  const tax = Math.round((subtotal * Number(bill.taxPercent || 0)) / 100);
-  const tip = Math.round((subtotal * Number(bill.tipPercent || 0)) / 100);
+  if (bill.status !== 'closed' || !bill.finalBreakdown) {
+    return (
+      <div className="mx-auto max-w-4xl px-5 py-10 sm:px-8 sm:py-14">
+        <Card className="text-center">
+          <h1 className="font-display text-3xl font-bold text-slate-950">
+            This bill hasn&apos;t been finalized yet
+          </h1>
+          <p className="mt-3 text-slate-500">
+            Final totals will appear here after the host closes the bill.
+          </p>
+          <Button
+            variant="outline"
+            className="mt-6"
+            onClick={() => navigate(`/bills/${bill._id}`)}
+          >
+            Back to bill
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  const breakdown = bill.finalBreakdown;
+  const participantsById = new Map(
+    (bill.participants || []).map((participant) => [
+      String(participant._id),
+      participant,
+    ]),
+  );
+  const subtotal = breakdown.reduce(
+    (sum, entry) =>
+      sum + entry.claimedItemsTotalCents + entry.unclaimedShareTotalCents,
+    0,
+  );
+  const tax = breakdown.reduce((sum, entry) => sum + entry.taxShareCents, 0);
+  const tip = breakdown.reduce((sum, entry) => sum + entry.tipShareCents, 0);
   const title = bill.restaurantName || bill.hostName;
-  const copyAmount = async (person) => {
+  const copyAmount = async (person, totalCents) => {
     await navigator.clipboard.writeText(
-      `${person.name} owes ${formatCurrency(person.total, bill.currency)} for ${title}`,
+      `${person.name} owes ${formatCurrency(totalCents, bill.currency)} for ${title}`,
     );
     showToast('Amount copied');
   };
@@ -80,54 +110,64 @@ export default function TotalsPage() {
         </div>
       </Card>
       <div className="space-y-5">
-        {breakdown.map((person) => {
-          const upiLink =
-            bill.currency === 'INR' && bill.hostUpiId
-              ? `upi://pay?pa=${encodeURIComponent(bill.hostUpiId)}&pn=${encodeURIComponent(title)}&am=${(person.total / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(`FairSplit ${title} - ${person.name}`)}`
-              : null;
+        {breakdown.map((entry) => {
+          const participant = participantsById.get(String(entry.participantId));
+          if (!participant) return null;
+          const totalCents = entry.finalTotalCents;
+
           return (
-            <Card key={person._id}>
+            <Card key={entry.participantId}>
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <span
-                    className={`grid h-11 w-11 place-items-center rounded-full font-bold text-white ${getAvatarColor(person._id)}`}
+                    className={`grid h-11 w-11 place-items-center rounded-full font-bold text-white ${getAvatarColor(participant._id)}`}
                   >
-                    {getInitials(person.name)}
+                    {getInitials(participant.name)}
                   </span>
                   <div>
                     <h2 className="font-display text-xl font-bold text-slate-950">
-                      {person.name}
+                      {participant.name}
                     </h2>
-                    <p className="text-sm text-slate-500">
-                      {person.items.length} items
-                    </p>
+                    <p className="text-sm text-slate-500">Final amount</p>
                   </div>
                 </div>
                 <p className="text-2xl font-bold text-slate-950">
-                  {formatCurrency(person.total, bill.currency)}
+                  {formatCurrency(totalCents, bill.currency)}
                 </p>
               </div>
               <div className="mt-5 divide-y divide-slate-100">
-                {person.items.map((item, index) => (
-                  <div
-                    key={`${item.name}-${index}`}
-                    className="flex justify-between py-2 text-sm text-slate-600"
-                  >
-                    <span>{item.name}</span>
-                    <span>{formatCurrency(item.amount, bill.currency)}</span>
-                  </div>
-                ))}
+                <div className="flex justify-between py-2 text-sm text-slate-600">
+                  <span>Claimed items</span>
+                  <span>
+                    {formatCurrency(
+                      entry.claimedItemsTotalCents,
+                      bill.currency,
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between py-2 text-sm text-slate-600">
+                  <span>Unclaimed share</span>
+                  <span>
+                    {formatCurrency(
+                      entry.unclaimedShareTotalCents,
+                      bill.currency,
+                    )}
+                  </span>
+                </div>
               </div>
               <div className="mt-4 flex justify-between border-t border-slate-100 pt-3 text-sm text-slate-500">
                 <span>Tax & tip</span>
                 <span>
-                  {formatCurrency(person.tax + person.tip, bill.currency)}
+                  {formatCurrency(
+                    entry.taxShareCents + entry.tipShareCents,
+                    bill.currency,
+                  )}
                 </span>
               </div>
-              {upiLink ? (
+              {entry.upiLink ? (
                 <a
                   className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white"
-                  href={upiLink}
+                  href={entry.upiLink}
                 >
                   <ExternalLink size={16} /> Pay via UPI
                 </a>
@@ -135,7 +175,7 @@ export default function TotalsPage() {
                 <Button
                   variant="secondary"
                   className="mt-5 w-full"
-                  onClick={() => copyAmount(person)}
+                  onClick={() => copyAmount(participant, totalCents)}
                 >
                   <Copy size={16} /> Copy amount to share
                 </Button>

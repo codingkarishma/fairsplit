@@ -53,11 +53,11 @@ function HomePage() {
             Group dinners, without the maths
           </p>
           <h1 className="font-display text-5xl font-bold leading-[1.02] tracking-tight text-slate-950 sm:text-7xl">
-            The easy way to split the bill.
+            The easy way to split the bill
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-slate-500 sm:text-xl">
-            FairSplit turns one receipt into a shared, live bill. Upload it,
-            share it, and let everyone claim what they had.
+            FairSplit turns one receipt into a shared, live bill.
+            Simply upload it, Share it, and let everyone claim what they had
           </p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <Link to="/host">
@@ -67,7 +67,7 @@ function HomePage() {
             </Link>
             <Link to="/join">
               <Button size="lg" variant="outline">
-                Join with a code
+                Join via code
               </Button>
             </Link>
           </div>
