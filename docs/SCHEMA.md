@@ -53,6 +53,7 @@ claim-validation `$expr`.
 |---|---|---|
 | `billId` | ObjectId ref Bill, required | |
 | `name` | String, required | |
+| `isHost` | Boolean, default `false` | Created automatically at publish with `name = bill.hostName`; included in participant counts and breakdowns even without claims. |
 | `joinedAt` | Date, default now | |
 
 ## totals.service.js — output shape
