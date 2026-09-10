@@ -31,7 +31,7 @@ const upload = multer({
     if (allowed.includes(file.mimetype)) return cb(null, true);
     cb(
       new Error(
-        'Unsupported format. Use JPG, PNG, BMP, WebP, or TXT. HEIC is currently unsupported.',
+        "PDFs aren't supported yet — upload a photo or screenshot of the receipt",
       ),
     );
   },

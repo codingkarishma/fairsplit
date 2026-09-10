@@ -1,13 +1,13 @@
 const { createWorker } = require('tesseract.js');
 
 const SKIP_KEYWORDS =
-  /subtotal|^\s*total\b|grand total|tax|tip|cash|change|tendered|balance|card|amount due|thank you|receipt|table|server|guests|entry|contactless|approved|ref:|status|phone|www\.|invalid date/i;
+  /subtotal|^\s*total\b|grand total|tax|tip|cash|change|tendered|balance|card|amount due|thank you|receipt|table|server|guests|entry|contactless|approved|ref:|status|phone|www\.|invalid date|gstin|hsn|invoice no|counter|cashier|customer id|customer name|mobile no|tax invoice|tender|gross total|total discount|total invoice amount|total received|change due|no of items|total qty|cgst|sgst|cess|place of supply|registered office|return policy/i;
 const SKIP_PATTERNS = [
   /^\s*\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\s*$/,
   /https?:\/\/|www\./i,
   /^\s*(time|date|ref|auth|approval)\s*:/i,
 ];
-const PRICE_PATTERN = /[₹$]?\s*([0-9,]+\.?[0-9]*)/g;
+const PRICE_PATTERN = /[₹$€£]?\s*([0-9,]+\.?[0-9]*)/g;
 
 function parseReceiptLines(lines, { skipDecorativeLines = false } = {}) {
   return lines.reduce((items, line) => {

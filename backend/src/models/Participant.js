@@ -6,6 +6,7 @@ const { Schema } = mongoose;
 const ParticipantSchema = new Schema({
   billId: { type: Schema.Types.ObjectId, ref: 'Bill', required: true },
   name: { type: String, required: true },
+  isHost: { type: Boolean, default: false },
   joinedAt: { type: Date, default: Date.now },
 });
 

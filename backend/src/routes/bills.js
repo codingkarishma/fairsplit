@@ -155,6 +155,11 @@ router.post('/:id/publish', async (req, res) => {
       { new: true },
     );
     if (!bill) return res.status(404).json({ error: 'Draft bill not found' });
+    await Participant.findOneAndUpdate(
+      { billId: bill._id, isHost: true },
+      { $setOnInsert: { billId: bill._id, name: bill.hostName, isHost: true } },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
     res.json(bill);
   } catch (err) {
     console.error('Bill publish failed:', err);

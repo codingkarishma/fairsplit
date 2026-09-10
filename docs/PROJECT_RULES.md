@@ -117,6 +117,8 @@ Expect several non-item lines per receipt to need manual deletion — this
 is expected behavior, not a bug to keep chasing. Never add a filter that
 could silently drop a real item to catch a junk line; a visible junk line
 is recoverable, a missing item is not.
+Multi-currency symbols and retail keywords are covered; GST two-line items are deferred to V2.
+The host is an `isHost` participant created at publish and claims through the same UI as joiners.
 
 ## Real-time updates
 
