@@ -36,12 +36,6 @@ const ItemSchema = new Schema({
         type: Number,
         default: null,
       },
-      customPercent: {
-        type: Number,
-        default: null,
-        min: 0,
-        max: 100,
-      },
     },
   ],
 });
