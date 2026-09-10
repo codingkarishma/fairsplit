@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
+import { ClaimItems } from '../components/shared/ClaimItems';
 import { ErrorMessage } from '../components/common/ErrorMessage';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { useBill } from '../hooks/useBill';
@@ -131,6 +132,7 @@ export default function BillDashboard() {
                   <span className="font-semibold text-slate-700">
                     {person.name}
                   </span>
+                  {person.isHost && <Badge>Host</Badge>}
                 </div>
               ))
             ) : (
@@ -138,6 +140,16 @@ export default function BillDashboard() {
             )}
           </div>
         </Card>
+
+        {bill.status === 'open' &&
+          bill.participants?.some((person) => person.isHost) && (
+            <ClaimItems
+              bill={bill}
+              participant={bill.participants.find((person) => person.isHost)}
+              shareCode={bill.shareCode}
+              onRefresh={refetch}
+            />
+          )}
 
         <Card>
           <div className="flex items-center justify-between">

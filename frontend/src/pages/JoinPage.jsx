@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Lock, Users } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
+import { ClaimItems } from '../components/shared/ClaimItems';
 import { ErrorMessage } from '../components/common/ErrorMessage';
 import { Input } from '../components/common/Input';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
@@ -68,6 +69,17 @@ export default function JoinPage() {
     return () => clearInterval(interval);
   }, [refreshItems, view]);
 
+  const myTotal = (bill?.items || []).reduce((sum, item) => {
+    const claim = item.claims?.find(
+      (entry) => String(entry.participantId) === String(participant?._id),
+    );
+    return claim
+      ? sum +
+          (claim.customAmountCents ??
+            Math.floor(item.priceCents / item.claims.length))
+      : sum;
+  }, 0);
+
   const handleJoin = async (event) => {
     event.preventDefault();
     setLoading(true);
@@ -92,36 +104,6 @@ export default function JoinPage() {
       setLoading(false);
     }
   };
-
-  const toggleClaim = async (item) => {
-    if (!participant || bill.status === 'closed') return;
-    const hasClaimed = item.claims?.some(
-      (claim) => String(claim.participantId) === String(participant._id),
-    );
-    setLoading(true);
-    try {
-      if (hasClaimed)
-        await api.unclaimItem(bill._id, item._id, shareCode, participant._id);
-      else await api.claimItem(bill._id, item._id, shareCode, participant._id);
-      await refreshItems();
-    } catch (requestError) {
-      setError(requestError.message);
-      showToast(requestError.message, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const myTotal = (bill?.items || []).reduce((sum, item) => {
-    const claim = item.claims?.find(
-      (entry) => String(entry.participantId) === String(participant?._id),
-    );
-    return claim
-      ? sum +
-          (claim.customAmountCents ??
-            Math.floor(item.priceCents / item.claims.length))
-      : sum;
-  }, 0);
 
   const activeView = participant && view === 'join-form' ? 'claim' : view;
   if (activeView === 'loading') return <LoadingSpinner />;
@@ -214,71 +196,16 @@ export default function JoinPage() {
                   {getInitials(person.name)}
                 </span>
                 {person.name}
+                {person.isHost && <Badge>Host</Badge>}
               </span>
             ))}
           </div>
-          <Card padded={false}>
-            <div className="divide-y divide-slate-100">
-              {bill.items?.map((item) => {
-                const myClaim = item.claims?.some(
-                  (claim) =>
-                    String(claim.participantId) === String(participant._id),
-                );
-                const isFullyClaimed =
-                  (item.claims?.length || 0) > 0 &&
-                  !item.claims?.some(
-                    (claim) =>
-                      String(claim.participantId) === String(participant._id),
-                  );
-                return (
-                  <div
-                    key={item._id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => toggleClaim(item)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        toggleClaim(item);
-                      }
-                    }}
-                    className={`flex cursor-pointer items-center justify-between gap-4 px-5 py-4 outline-none focus:bg-blue-50 ${myClaim ? 'bg-blue-50' : ''}`}
-                  >
-                    <div>
-                      <p className="font-semibold text-slate-800">
-                        {item.name}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {item.claims?.length
-                          ? `${item.claims.length} claimed`
-                          : 'Unclaimed'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-slate-700">
-                        {formatCurrency(item.priceCents, bill.currency)}
-                      </p>
-                      <span
-                        className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold ${myClaim ? 'bg-blue-600 text-white' : isFullyClaimed ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-700'}`}
-                      >
-                        {myClaim ? (
-                          <>
-                            <Check size={12} /> Claimed
-                          </>
-                        ) : isFullyClaimed ? (
-                          <>
-                            <Lock size={12} /> Taken
-                          </>
-                        ) : (
-                          'Tap to claim'
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
+          <ClaimItems
+            bill={bill}
+            participant={participant}
+            shareCode={shareCode}
+            onRefresh={refreshItems}
+          />
           {bill.status === 'closed' && (
             <Button
               className="mt-6"

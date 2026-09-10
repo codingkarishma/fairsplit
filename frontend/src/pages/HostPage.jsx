@@ -68,6 +68,7 @@ export default function HostPage() {
   const handleFile = useCallback(async (file) => {
     if (!file) return;
     setStep('uploading');
+    setLoading(true);
     setError('');
     try {
       const result = await api.uploadReceipt(file);
@@ -76,6 +77,11 @@ export default function HostPage() {
     } catch (requestError) {
       setError(requestError.response?.data?.message || requestError.message);
       setStep('upload');
+    } finally {
+      setLoading(false);
+      setStep((currentStep) =>
+        currentStep === 'uploading' ? 'upload' : currentStep,
+      );
     }
   }, []);
 
@@ -199,7 +205,9 @@ export default function HostPage() {
             <h2 className="mt-5 font-display text-2xl font-bold text-slate-950">
               Drop your receipt here
             </h2>
-            <p className="mt-2 text-slate-500">JPG, PNG, or PDF up to 10MB.</p>
+            <p className="mt-2 text-slate-500">
+              JPG, PNG, BMP, WebP, or TXT up to 5MB. PDFs are not supported yet.
+            </p>
             <Button
               className="mt-6"
               onClick={() => fileInputRef.current?.click()}
@@ -210,7 +218,7 @@ export default function HostPage() {
               ref={fileInputRef}
               className="hidden"
               type="file"
-              accept="image/*,.pdf"
+              accept="image/jpeg,image/png,image/bmp,image/webp,text/plain"
               onChange={(event) => handleFile(event.target.files[0])}
             />
           </div>
