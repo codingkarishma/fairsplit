@@ -17,7 +17,7 @@ export default function BillDashboard() {
   const { billId } = useParams();
   const navigate = useNavigate();
   const { bill, loading, error, refetch } = useBill(billId);
-  const [hostBill] = useLocalStorage('fairsplit_host_bill', null);
+  const [hostBill] = useLocalStorage(`fairsplit_host_${billId}`, null);
   const { showToast } = useToast();
   const [actionLoading, setActionLoading] = useState(false);
 

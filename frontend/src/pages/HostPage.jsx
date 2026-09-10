@@ -8,7 +8,6 @@ import { Card } from '../components/common/Card';
 import { ErrorMessage } from '../components/common/ErrorMessage';
 import { Input } from '../components/common/Input';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
-import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useToast } from '../hooks/useToast';
 import { validateBillForm } from '../utils/validation';
 
@@ -21,7 +20,7 @@ const currencies = [
 export default function HostPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
-  const [bill, setBill] = useLocalStorage('fairsplit_host_bill', null);
+  const [bill, setBill] = useState(null);
   const { showToast } = useToast();
   const [step, setStep] = useState('form');
   const [title, setTitle] = useState('');
@@ -54,6 +53,10 @@ export default function HostPage() {
         hostUpiId: hostUpiId || undefined,
       });
       setBill(created);
+      localStorage.setItem(
+        `fairsplit_host_${created._id}`,
+        JSON.stringify(created),
+      );
       setStep('upload');
     } catch (requestError) {
       setError(requestError.response?.data?.message || requestError.message);

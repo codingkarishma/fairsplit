@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const ocrRouter = require('./routes/ocr');
 const billsRouter = require('./routes/bills');
 
@@ -13,14 +14,32 @@ require('./models/Participant');
 
 const app = express();
 const server = http.createServer(app);
+const billCreateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: {
+    error: 'Too many bill creation requests, please try again later.',
+  },
+});
+const ocrLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many OCR requests, please try again later.' },
+});
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
-app.use(cors());
+app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.post('/api/bills', billCreateLimiter);
+app.post('/api/ocr/extract', ocrLimiter);
 app.use('/api/ocr', ocrRouter);
 app.use('/api/bills', billsRouter);
 

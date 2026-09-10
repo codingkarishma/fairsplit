@@ -109,6 +109,26 @@ wrong until proven otherwise, not the rule.
     an error naming the specific item — this is an intentional dead-end
     requiring human resolution, not a bug to silently paper over.
 
+## OCR
+
+OCR line-filtering is a best-effort keyword/pattern list, not a parser.
+The host review screen is the correctness guarantee, not the regex.
+Expect several non-item lines per receipt to need manual deletion — this
+is expected behavior, not a bug to keep chasing. Never add a filter that
+could silently drop a real item to catch a junk line; a visible junk line
+is recoverable, a missing item is not.
+
+## Real-time updates
+
+Real-time updates (Socket.io, live push, room-based presence, chat,
+reminders/nudges) were evaluated and explicitly deferred to V2. V1 uses
+REST + polling (JoinPage.jsx refetches every 5 seconds) — this is a
+deliberate, locked decision, not an unfinished feature. Do not introduce
+Socket.io, 'rooms', chat, or reminder features in V1 — all of these
+depend on a real-time transport layer that doesn't exist and is out of
+scope until V2 is explicitly started as its own separate task with its
+own design pass.
+
 ## Infrastructure
 
 18. **No Redis.** MongoDB's atomic conditional updates (`findOneAndUpdate`
@@ -120,7 +140,7 @@ wrong until proven otherwise, not the rule.
     bill/item/claim structure naturally, and every concurrency requirement
     has been solved and verified with Mongo's native atomic operators.
     "Other apps use Postgres+Redis" is not a reason to switch — it means
-    that's *a* valid stack, not that this one is wrong.
+    that's _a_ valid stack, not that this one is wrong.
 
 20. **Final close results are persisted, never recomputed client-side.**
     `POST /:id/close` writes its computed `breakdown` (including UPI
