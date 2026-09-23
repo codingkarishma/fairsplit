@@ -1,8 +1,10 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const ocrRouter = require('./routes/ocr');
 const billsRouter = require('./routes/bills');
@@ -14,42 +16,60 @@ require('./models/Participant');
 
 const app = express();
 const server = http.createServer(app);
+
+const rateLimitWindowMs = Number.parseInt(
+  process.env.RATE_LIMIT_WINDOW_MS || '900000',
+  10,
+);
+const rateLimitMaxRequests = Number.parseInt(
+  process.env.RATE_LIMIT_MAX_REQUESTS || '100',
+  10,
+);
+
 const billCreateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
+  windowMs: rateLimitWindowMs,
+  max: rateLimitMaxRequests,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: {
     error: 'Too many bill creation requests, please try again later.',
   },
 });
+
 const ocrLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
+  windowMs: rateLimitWindowMs,
+  max: rateLimitMaxRequests,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { error: 'Too many OCR requests, please try again later.' },
 });
+
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
-const allowedOrigins = (
-  process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:5174'
-)
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+console.log('Allowed CORS origins:', allowedOrigins);
+
+app.use(helmet());
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) callback(null, true);
-      else callback(null, false);
+      if (!origin || allowedOrigins.includes(origin))
+        return callback(null, true);
+      console.warn('Blocked by CORS:', origin);
+      return callback(new Error('Not allowed by CORS'));
     },
+    credentials: true,
   }),
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 app.post('/api/bills', billCreateLimiter);
 app.post('/api/ocr/extract', ocrLimiter);
@@ -61,9 +81,16 @@ app.get('/', (req, res) => res.json({ message: 'FairSplit API is running' }));
 // Socket.io connection (real-time claims will go here)
 io.on('connection', (socket) => console.log('User connected:', socket.id));
 
-// MongoDB connection (placeholder — set MONGODB_URI when ready)
+// Fail fast in production if MONGODB_URI is missing
+if (process.env.NODE_ENV === 'production' && !process.env.MONGODB_URI) {
+  console.error('FATAL: MONGODB_URI is not set in production');
+  process.exit(1);
+}
+
+// MongoDB connection
 const MONGODB_URI =
   process.env.MONGODB_URI || 'mongodb://localhost:27017/fairsplit';
+
 mongoose
   .connect(MONGODB_URI)
   .then(() => {

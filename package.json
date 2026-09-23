@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "start": "npm --prefix backend start",
+    "dev": "npm --prefix backend run dev"
+  },
   "dependencies": {
     "lucide-react": "^1.43.0",
     "motion": "^13.2.0",
