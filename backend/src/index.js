@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -44,10 +43,6 @@ const ocrLimiter = rateLimit({
   message: { error: 'Too many OCR requests, please try again later.' },
 });
 
-const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
-});
-
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
@@ -78,9 +73,6 @@ app.use('/api/bills', billsRouter);
 
 app.get('/', (req, res) => res.json({ message: 'FairSplit API is running' }));
 
-// Socket.io connection (real-time claims will go here)
-io.on('connection', (socket) => console.log('User connected:', socket.id));
-
 // Fail fast in production if MONGODB_URI is missing
 if (process.env.NODE_ENV === 'production' && !process.env.MONGODB_URI) {
   console.error('FATAL: MONGODB_URI is not set in production');
@@ -103,4 +95,4 @@ mongoose
     process.exit(1);
   });
 
-module.exports = { app, server, io };
+module.exports = { app, server };
